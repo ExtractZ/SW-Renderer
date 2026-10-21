@@ -7,7 +7,7 @@
 **
 **  Abstract    : Linker script for B-L4S5I-IOT01A Board embedding STM32L4S5VITx Device from stm32l4plus series
 **                      2048KBytes FLASH
-**                      640KBytes RAM
+**                      256KBytes RAM
 **                      64KBytes RAM2
 **                      384KBytes RAM3
 **

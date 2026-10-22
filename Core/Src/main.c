@@ -22,6 +22,8 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <stdio.h>
+#include "lcd.h"
+#include "timing.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -100,6 +102,20 @@ int main(void)
   /* USER CODE BEGIN 2 */
   setvbuf(stdout, NULL, _IONBF, 0);
   printf("SW-Renderer boot, SYSCLK=%lu\r\n", HAL_RCC_GetSysClockFreq());
+
+  Timing_Init();
+
+  //timer sanity check: should print ~100000 us
+  uint32_t t0 = timing_cycles();
+  HAL_Delay(100);
+  printf("HAL_Delay(100) = %lu us\r\n", cycle_to_us(timing_cycles() - t0));
+
+  lcd_init(&hspi1);
+  printf("lcd init done\r\n");
+
+  //red, green, blue, white
+  const uint16_t test_colors[] = { 0xF800, 0x07E0, 0x001F, 0xFFFF };
+  uint32_t color_idx = 0;
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -109,6 +125,14 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+    //full-screen fill test: one frame should take ~31 ms at 30 MHz SPI
+    uint32_t start = timing_cycles();
+    lcd_fill(test_colors[color_idx]);
+    uint32_t us = cycle_to_us(timing_cycles() - start);
+    printf("fill 0x%04X: %lu us (%lu FPS)\r\n", test_colors[color_idx], us, 1000000 / us);
+
+    color_idx = (color_idx + 1) % 4;
+    HAL_Delay(500);
   }
   /* USER CODE END 3 */
 }

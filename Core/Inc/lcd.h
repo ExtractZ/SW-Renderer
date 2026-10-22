@@ -5,7 +5,7 @@
 #include <stdint.h>
 
 #define LCD_WIDTH 240
-#define LCD_WEIGHT 240
+#define LCD_HEIGHT 240
 #define LCD_Y_OFFSET 0
 /*
 This is the definitions of the LCD driver for the SPI display

@@ -38,6 +38,19 @@ static void spi_set_datasize(uint32_t size)
 	else
 		MODIFY_REG(lcd_spi->Instance->CR2, SPI_CR2_DS | SPI_CR2_FRXTH, size); //switches to 16 bit
 	lcd_spi->Init.DataSize = size; // HAL reads this to decide 8 vs 16-bit writes
+
+	__HAL_SPI_ENABLE(lcd_spi);
+}
+
+
+static inline void cs_low(void)
+{
+	HAL_GPIO_WritePin(LCD_CS_GPIO_Port, LCD_CS_Pin, GPIO_PIN_RESET);
+}
+
+static inline void cs_high(void)
+{
+	HAL_GPIO_WritePin(LCD_CS_GPIO_Port, LCD_CS_Pin, GPIO_PIN_SET);
 }
 
 // starts the next piece of a DMA frame (at most 65535 pixels)
@@ -55,9 +68,8 @@ void lcd_init(SPI_HandleTypeDef *hspi)
 {
 	lcd_spi = hspi;
 
-	// display is the only device on SPI1, so CS stays low the whole time
-	// (harmless on modules without a CS pin)
-	HAL_GPIO_WritePin(LCD_CS_GPIO_Port, LCD_CS_Pin, GPIO_PIN_RESET);
+	// CS only goes low during a transaction (see cs_low/cs_high)
+	cs_high();
 
 	// hardware reset
 	HAL_GPIO_WritePin(LCD_RST_GPIO_Port, LCD_RST_Pin, GPIO_PIN_SET);
@@ -98,7 +110,9 @@ void lcd_cmd(uint8_t cmd)
 
 	spi_set_datasize(SPI_DATASIZE_8BIT);
 	HAL_GPIO_WritePin(LCD_DC_GPIO_Port, LCD_DC_Pin, GPIO_PIN_RESET); // DC low = command
-	HAL_SPI_Transmit(lcd_spi, &cmd, 1, HAL_MAX_DELAY);
+	cs_low();
+	HAL_SPI_Transmit(lcd_spi, &cmd, 1, HAL_MAX_DELAY); // returns once the byte is fully out
+	cs_high();
 }
 
 void lcd_data(const uint8_t *data, uint32_t len)
@@ -107,7 +121,9 @@ void lcd_data(const uint8_t *data, uint32_t len)
 
 	spi_set_datasize(SPI_DATASIZE_8BIT);
 	HAL_GPIO_WritePin(LCD_DC_GPIO_Port, LCD_DC_Pin, GPIO_PIN_SET); // DC high = data
+	cs_low();
 	HAL_SPI_Transmit(lcd_spi, (uint8_t *)data, (uint16_t)len, HAL_MAX_DELAY);
+	cs_high();
 }
 
 void lcd_set_window(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1)
@@ -137,6 +153,7 @@ void lcd_push_dma(const uint16_t *buf, uint32_t count)
 	dma_ptr = buf;
 	dma_remaining = count;
 	dma_busy = 1;
+	cs_low(); // raised again in the callback once the last chunk is out
 	dma_start_chunk();
 	// returns immediately; the CPU is free while DMA sends the frame
 }
@@ -172,10 +189,12 @@ void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi)
 {
 	if (hspi != lcd_spi) return;
 
-	if (dma_remaining > 0)
+	if (dma_remaining > 0) {
 		dma_start_chunk(); // frame was bigger than one DMA transfer
-	else
+	} else {
+		cs_high();
 		dma_busy = 0;
+	}
 }
 
 // on an SPI/DMA error, release the busy flag so the program doesn't hang
@@ -184,5 +203,6 @@ void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
 	if (hspi != lcd_spi) return;
 
 	dma_remaining = 0;
+	cs_high();
 	dma_busy = 0;
 }

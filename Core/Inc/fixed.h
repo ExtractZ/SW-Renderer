@@ -43,6 +43,7 @@ static inline fx fx_max(fx a, fx b) { return a > b ? a : b; }
 static inline fx fx_clamp(fx a, fx lo, fx hi) { return a < lo ? lo : (a > hi ? hi : a); }
 
 fx fx_sqrt(fx a); //returns 0 for a <= 0
+uint32_t fx_isqrt64(uint64_t n); //integer sqrt of a plain 64-bit number, rounded down
 
 //the following is an invention of how to do angles: using 4096 as full 360. one step is 0.088 (260/4096)
 typedef int32_t fx_angle;

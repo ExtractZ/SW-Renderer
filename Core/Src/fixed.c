@@ -23,8 +23,12 @@ fx fx_cos(fx_angle a)
 fx fx_sqrt(fx a)
 {
 	if (a <= 0) return 0;
+	return (fx)fx_isqrt64((uint64_t)a << FX_SHIFT); //sqrt(a * 65536) is Q16.16
+}
 
-	uint64_t n = (uint64_t)a << FX_SHIFT;
+//plain integer square root (rounded down), bit by bit from the top
+uint32_t fx_isqrt64(uint64_t n)
+{
 	uint64_t result = 0;
 	uint64_t bit = (uint64_t)1 << 62; //highest power of 4 that fits
 
@@ -40,5 +44,5 @@ fx fx_sqrt(fx a)
 		}
 		bit >>= 2;
 	}
-	return (fx)result;
+	return (uint32_t)result;
 }

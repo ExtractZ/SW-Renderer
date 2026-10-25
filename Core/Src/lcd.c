@@ -62,6 +62,12 @@ static void dma_start_chunk(void)
 	dma_ptr = p + n;
 	dma_remaining -= n;
 	HAL_SPI_Transmit_DMA(lcd_spi, (uint8_t *)p, (uint16_t)n); //p = pointer to data, n = nb items
+
+	//HAL_SPI_Transmit_DMA turns on the SPI error interrupt. In 2-line mode the receiver
+	//runs too, nobody reads it, and it reports an overrun on every pixel sent: ~57,600
+	//interrupts per frame, stealing CPU time from rendering. Nothing useful comes from
+	//it here (HAL clears the overrun flag when the transfer completes), so turn it off
+	__HAL_SPI_DISABLE_IT(lcd_spi, SPI_IT_ERR);
 }
 
 void lcd_init(SPI_HandleTypeDef *hspi)
@@ -163,10 +169,15 @@ int lcd_busy(void)
 	return dma_busy;
 }
 
+void lcd_draw_rows(const uint16_t *buf, uint16_t y0, uint16_t rows)
+{
+	lcd_set_window(0, y0, LCD_WIDTH - 1, y0 + rows - 1); // waits for any frame still sending
+	lcd_push_dma(buf, (uint32_t)LCD_WIDTH * rows);
+}
+
 void lcd_draw_frame(const uint16_t *buf)
 {
-	lcd_set_window(0, 0, LCD_WIDTH - 1, LCD_HEIGHT - 1); // waits for any frame still sending
-	lcd_push_dma(buf, (uint32_t)LCD_WIDTH * LCD_HEIGHT);
+	lcd_draw_rows(buf, 0, LCD_HEIGHT);
 }
 
 void lcd_fill(uint16_t color)

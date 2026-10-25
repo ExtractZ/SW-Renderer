@@ -26,7 +26,7 @@
 #include "timing.h"
 #include "gfx.h"
 #include "mat.h"
-#include "project.h"
+#include "render.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -116,24 +116,13 @@ int main(void)
   lcd_init(&hspi1);
   printf("lcd init done\r\n");
 
-  //wireframe cube: 8 corners at +-1, 12 edges between them
-  static const vec3 cube_verts[8] = {
-    { -FX_ONE, -FX_ONE, -FX_ONE }, {  FX_ONE, -FX_ONE, -FX_ONE },
-    {  FX_ONE,  FX_ONE, -FX_ONE }, { -FX_ONE,  FX_ONE, -FX_ONE },
-    { -FX_ONE, -FX_ONE,  FX_ONE }, {  FX_ONE, -FX_ONE,  FX_ONE },
-    {  FX_ONE,  FX_ONE,  FX_ONE }, { -FX_ONE,  FX_ONE,  FX_ONE },
-  };
-  //grouped by direction: 4 edges along x (red), 4 along y (green), 4 along z (blue)
-  static const uint8_t cube_edges[12][2] = {
-    { 0, 1 }, { 3, 2 }, { 4, 5 }, { 7, 6 },
-    { 0, 3 }, { 1, 2 }, { 4, 7 }, { 5, 6 },
-    { 0, 4 }, { 1, 5 }, { 2, 6 }, { 3, 7 },
-  };
-  static const uint16_t edge_colors[3] = { GFX_RED, GFX_GREEN, GFX_BLUE };
-  const fx cam_dist = FX(4.0); //cube center is 4 units in front of the camera
+  //light from the upper left, slightly in front (camera space: x right, y up, z away)
+  render_set_light(vec3_make(FX(-1.0), FX(1.0), FX(-1.0)));
+  const vec3 cube_pos = { 0, 0, FX(4.0) }; //cube center is 4 units in front of the camera
 
   fx_angle ax = 0, ay = 0, az = 0;
   uint32_t frame = 0, render_sum = 0, frame_sum = 0;
+  render_stats stats = { 0 };
   uint32_t frame_start = timing_cycles();
   /* USER CODE END 2 */
 
@@ -146,27 +135,11 @@ int main(void)
     /* USER CODE BEGIN 3 */
     uint32_t render_start = timing_cycles();
 
-    //rotate each corner, push it in front of the camera, project to the screen
     mat3 rot;
     mat3_rotate_xyz(&rot, ax, ay, az);
 
-    vec3 screen[8];
-    int visible[8];
-    for (int i = 0; i < 8; i++) // for each vertex
-    {
-      vec3 p = mat3_mul_vec(&rot, cube_verts[i]); //rotate
-      p.z += cam_dist;
-      visible[i] = project_point(p, &screen[i]); // then move by proejcted point
-    }
-
-    gfx_clear(GFX_BLACK); //clear framebuffer
-    for (int e = 0; e < 12; e++) // for each edge
-    {
-      int a = cube_edges[e][0], b = cube_edges[e][1];
-      if (visible[a] && visible[b])
-        gfx_line(fx_round(screen[a].x), fx_round(screen[a].y),
-                 fx_round(screen[b].x), fx_round(screen[b].y), edge_colors[e / 4]); //draw line between the noew positioned points
-    }
+    gfx_clear(GFX_BLACK);
+    render_mesh_flat(&mesh_cube, &rot, cube_pos, GFX_WHITE, &stats);
 
     render_sum += timing_cycles() - render_start;
 
@@ -182,9 +155,11 @@ int main(void)
     if (++frame % 30 == 0)
     {
       uint32_t frame_us = cycle_to_us(frame_sum / 30);
-      printf("render %lu us, frame %lu us, %lu FPS\r\n",
-             cycle_to_us(render_sum / 30), frame_us, 1000000 / frame_us);
+      printf("render %lu us, frame %lu us, %lu FPS | tris/frame: %lu drawn, %lu culled, %lu skipped\r\n",
+             cycle_to_us(render_sum / 30), frame_us, 1000000 / frame_us,
+             stats.tris_drawn / 30, stats.tris_culled / 30, stats.tris_skipped / 30);
       render_sum = frame_sum = 0;
+      stats = (render_stats){ 0 };
     }
 
     //different speed per axis gives a tumbling motion

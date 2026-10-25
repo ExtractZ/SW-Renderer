@@ -141,6 +141,7 @@ int main(void)
     mat3_rotate_xyz(&rot, ax, ay, az);
 
     gfx_clear(GFX_BLACK);
+    gfx_clear_depth();
     render_mesh_flat(model, &rot, model_pos, model_color, &stats);
 
     render_sum += timing_cycles() - render_start;

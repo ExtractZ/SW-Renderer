@@ -22,6 +22,12 @@ static inline int32_t edge_bias(int32_t ax, int32_t ay, int32_t bx, int32_t by)
 	return (dy < 0 || (dy == 0 && dx > 0)) ? 0 : -1;
 }
 
+//64-bit -> 32-bit without wrapping
+static inline int32_t clamp32(int64_t v)
+{
+	return v > INT32_MAX ? INT32_MAX : (v < INT32_MIN ? INT32_MIN : (int32_t)v);
+}
+
 static inline int32_t min3(int32_t a, int32_t b, int32_t c) { int32_t m = a < b ? a : b; return m < c ? m : c; }
 static inline int32_t max3(int32_t a, int32_t b, int32_t c) { int32_t m = a > b ? a : b; return m > c ? m : c; }
 
@@ -62,30 +68,52 @@ int raster_tri_flat(const vec3 *v0, const vec3 *v1, const vec3 *v2, uint16_t col
 	int32_t step_x1 = -(y0 - y2) * SUB_ONE, step_y1 = (x0 - x2) * SUB_ONE;
 	int32_t step_x2 = -(y1 - y0) * SUB_ONE, step_y2 = (x1 - x0) * SUB_ONE;
 
-	//edge values at the center of the top-left pixel of the box, with the fill rule bias
+	//edge values at the center of the top-left pixel of the box
 	int32_t px = (min_x << SUB_BITS) + SUB_ONE / 2;
 	int32_t py = (min_y << SUB_BITS) + SUB_ONE / 2;
-	int32_t row0 = (x2 - x1) * (py - y1) - (y2 - y1) * (px - x1) + edge_bias(x1, y1, x2, y2);
-	int32_t row1 = (x0 - x2) * (py - y2) - (y0 - y2) * (px - x2) + edge_bias(x2, y2, x0, y0);
-	int32_t row2 = (x1 - x0) * (py - y0) - (y1 - y0) * (px - x0) + edge_bias(x0, y0, x1, y1);
+	int32_t e0 = (x2 - x1) * (py - y1) - (y2 - y1) * (px - x1);
+	int32_t e1 = (x0 - x2) * (py - y2) - (y0 - y2) * (px - x2);
+	int32_t e2 = (x1 - x0) * (py - y0) - (y1 - y0) * (px - x0);
+
+	//with the fill rule bias, for the inside test
+	int32_t row0 = e0 + edge_bias(x1, y1, x2, y2);
+	int32_t row1 = e1 + edge_bias(x2, y2, x0, y0);
+	int32_t row2 = e2 + edge_bias(x0, y0, x1, y1);
+
+	//weighted mix of dpeth for the pixels in between the vertices
+	int64_t d0 = v0->z, d1 = v1->z, d2 = v2->z;
+	int32_t z_row    = clamp32((d0 * e0 + d1 * e1 + d2 * e2) / area);
+	int32_t z_step_x = clamp32((d0 * step_x0 + d1 * step_x1 + d2 * step_x2) / area);
+	int32_t z_step_y = clamp32((d0 * step_y0 + d1 * step_y1 + d2 * step_y2) / area);
 
 	uint16_t *row = &gfx_fb[min_y * GFX_WIDTH];
+	uint16_t *zrow = &gfx_zb[min_y * GFX_WIDTH];
 	for (int32_t y = min_y; y <= max_y; y++) {
 		int32_t w0 = row0, w1 = row1, w2 = row2;
+		int32_t z = z_row;
 
 		for (int32_t x = min_x; x <= max_x; x++) {
 			//inside when all three are >= 0, i.e. none has its sign bit set
-			if ((w0 | w1 | w2) >= 0)
-				row[x] = color;
+			if ((w0 | w1 | w2) >= 0) {
+				//depth test: only draw if nearer (bigger) than what's already there
+				uint16_t depth = (uint16_t)(z >> 8);
+				if (depth > zrow[x]) {
+					zrow[x] = depth;
+					row[x] = color;
+				}
+			}
 			w0 += step_x0;
 			w1 += step_x1;
 			w2 += step_x2;
+			z += z_step_x;
 		}
 
 		row0 += step_y0;
 		row1 += step_y1;
 		row2 += step_y2;
+		z_row += z_step_y;
 		row += GFX_WIDTH;
+		zrow += GFX_WIDTH;
 	}
 	return 1;
 }

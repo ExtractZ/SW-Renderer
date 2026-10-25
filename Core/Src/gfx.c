@@ -8,6 +8,15 @@
 #endif
 
 uint16_t gfx_fb[GFX_PIXELS] FB_SECTION;
+uint16_t gfx_zb[GFX_PIXELS] FB_SECTION; //z-buffer, also in SRAM3
+
+//clears zbuffer depth
+void gfx_clear_depth(void)
+{
+	uint32_t *p = (uint32_t *)gfx_zb;
+	for (uint32_t i = 0; i < GFX_PIXELS / 2; i++)
+		p[i] = 0;
+}
 
 void gfx_clear(uint16_t color)
 {

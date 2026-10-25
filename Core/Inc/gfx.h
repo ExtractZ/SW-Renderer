@@ -25,7 +25,12 @@ display in one DMA transfer. Pixels are RGB565, row by row from the top-left:
 
 extern uint16_t gfx_fb[GFX_PIXELS];
 
+//depth of the nearest surface drawn so far at each pixel (see project.h).
+//bigger = nearer, 0 = nothing drawn yet (infinitely far)
+extern uint16_t gfx_zb[GFX_PIXELS];
+
 void gfx_clear(uint16_t color);
+void gfx_clear_depth(void); //call every frame before drawing
 
 //off-screen pixels are ignored, so lines can run partly off the edge
 static inline void gfx_pixel(int32_t x, int32_t y, uint16_t color)

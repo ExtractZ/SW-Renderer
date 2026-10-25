@@ -6,6 +6,7 @@
 #include <string.h>
 #include "raster.h"
 #include "gfx.h"
+#include "project.h"
 
 static int failures = 0;
 static uint8_t coverage[GFX_PIXELS]; //how many triangles drew each pixel
@@ -25,6 +26,7 @@ static vec3 P(double x, double y)
 static int draw_counted(vec3 a, vec3 b, vec3 c)
 {
 	gfx_clear(0);
+	gfx_clear_depth();
 	int drawn = raster_tri_flat(&a, &b, &c, 1);
 	for (int i = 0; i < GFX_PIXELS; i++)
 		coverage[i] += (uint8_t)gfx_fb[i];
@@ -113,6 +115,63 @@ static void test_clipping(void)
 	if (draw_counted(P(300, 300), P(400, 300), P(300, 400))) fail("offscreen: fully off-screen should draw nothing");
 }
 
+//screen point with a depth computed exactly like project_point (camera distance z)
+static vec3 PZ(double x, double y, double z)
+{
+	vec3 v = P(x, y);
+	v.z = (fx)((PROJ_DEPTH_K << (FX_SHIFT + 8)) / (fx)lround(z * 65536));
+	return v;
+}
+
+static uint16_t pixel(int x, int y) { return gfx_fb[y * GFX_WIDTH + x]; }
+
+//two overlapping triangles: the nearer one must win whichever is drawn first
+static void test_depth_order(void)
+{
+	vec3 n0 = PZ(20, 20, 3), n1 = PZ(200, 20, 3), n2 = PZ(20, 200, 3);    //near, z = 3
+	vec3 f0 = PZ(40, 40, 6), f1 = PZ(220, 40, 6), f2 = PZ(40, 220, 6);    //far, z = 6
+
+	gfx_clear(0);
+	gfx_clear_depth();
+	raster_tri_flat(&f0, &f1, &f2, 2);
+	raster_tri_flat(&n0, &n1, &n2, 1);
+	if (pixel(60, 60) != 1) fail("depth: far then near, near should win");
+	if (pixel(180, 60) != 2) fail("depth: far triangle should show where near doesn't cover");
+
+	gfx_clear(0);
+	gfx_clear_depth();
+	raster_tri_flat(&n0, &n1, &n2, 1);
+	raster_tri_flat(&f0, &f1, &f2, 2);
+	if (pixel(60, 60) != 1) fail("depth: near then far, near should still win");
+}
+
+//a tilted triangle (z = 2 on the left, 6 on the right) crossing a flat one at z = 4.
+//1/z goes 0.5 -> 0.1667 linearly across the screen, reaching 1/4 at 75% of the
+//way, so the tilted one must win left of that and lose right of it
+static void test_depth_slope(void)
+{
+	vec3 t0 = PZ(20, 20, 2), t1 = PZ(220, 20, 6), t2 = PZ(20, 220, 2);
+	vec3 t3 = PZ(220, 220, 6);
+	vec3 f0 = PZ(0, 0, 4), f1 = PZ(240, 0, 4), f2 = PZ(0, 240, 4), f3 = PZ(240, 240, 4);
+
+	gfx_clear(0);
+	gfx_clear_depth();
+	raster_tri_flat(&f0, &f1, &f3, 2); //flat quad covering the screen
+	raster_tri_flat(&f0, &f3, &f2, 2);
+	raster_tri_flat(&t0, &t1, &t3, 1); //tilted quad
+	raster_tri_flat(&t0, &t3, &t2, 1);
+
+	int crossover = 20 + (int)(0.75 * 200); //x = 170
+	if (pixel(crossover - 10, 120) != 1) fail("depth slope: tilted should win before the crossover");
+	if (pixel(crossover + 10, 120) != 2) fail("depth slope: flat should win after the crossover");
+
+	int seen = 0; //where the switch actually happens
+	for (int x = 20; x < 220; x++)
+		if (pixel(x, 120) == 2) { seen = x; break; }
+	printf("depth crossover at x = %d (expected %d)\n", seen, crossover);
+	if (abs(seen - crossover) > 1) fail("depth slope: crossover in the wrong place");
+}
+
 int main(void)
 {
 	test_full_screen();
@@ -120,6 +179,8 @@ int main(void)
 	test_backface();
 	test_area();
 	test_clipping();
+	test_depth_order();
+	test_depth_slope();
 
 	if (failures == 0) printf("all raster tests passed\n");
 	else printf("%d failure(s)\n", failures);

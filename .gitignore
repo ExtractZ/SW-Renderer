@@ -2,3 +2,6 @@ host/test_fixed
 Debug/
 Release/
 SW-Renderer.launchhost/test_vec
+SW-Renderer.launch
+stm32cubeide.project.prefs
+.settings

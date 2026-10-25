@@ -163,6 +163,12 @@ int lcd_busy(void)
 	return dma_busy;
 }
 
+void lcd_draw_frame(const uint16_t *buf)
+{
+	lcd_set_window(0, 0, LCD_WIDTH - 1, LCD_HEIGHT - 1); // waits for any frame still sending
+	lcd_push_dma(buf, (uint32_t)LCD_WIDTH * LCD_HEIGHT);
+}
+
 void lcd_fill(uint16_t color)
 {
 	// one block of pixels, sent over and over until the screen is covered

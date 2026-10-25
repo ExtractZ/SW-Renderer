@@ -123,7 +123,7 @@ int main(void)
   const vec3 model_pos = { 0, 0, FX(4.0) }; //model center is 4 units in front of the camera
 
   fx_angle ax = 0, ay = 0, az = 0;
-  uint32_t frame = 0, render_sum = 0, frame_sum = 0;
+  uint32_t frame = 0, render_sum = 0, wait_sum = 0, frame_sum = 0;
   render_stats stats = { 0 };
   uint32_t frame_start = timing_cycles();
   /* USER CODE END 2 */
@@ -146,9 +146,14 @@ int main(void)
 
     render_sum += timing_cycles() - render_start;
 
-    //single framebuffer for now: wait for the transfer before drawing the next frame
-    lcd_draw_frame(gfx_fb);
+    //double buffering: the previous frame (in the other buffer) may still be sending.
+    //wait for it to finish, since that buffer is the one we draw into next.
+    uint32_t wait_start = timing_cycles();
     while (lcd_busy()) {}
+    wait_sum += timing_cycles() - wait_start;
+
+    //send the frame just drawn (returns right away) and switch to the other buffer
+    lcd_draw_frame(gfx_swap());
 
     uint32_t now = timing_cycles();
     frame_sum += now - frame_start;
@@ -158,10 +163,11 @@ int main(void)
     if (++frame % 30 == 0)
     {
       uint32_t frame_us = cycle_to_us(frame_sum / 30);
-      printf("render %lu us, frame %lu us, %lu FPS | tris/frame: %lu drawn, %lu culled, %lu skipped\r\n",
-             cycle_to_us(render_sum / 30), frame_us, 1000000 / frame_us,
+      uint32_t render_us = cycle_to_us(render_sum / 30);
+      printf("render %lu us, wait %lu us, frame %lu us, %lu FPS, CPU busy %lu%% | tris/frame: %lu drawn, %lu culled, %lu skipped\r\n",
+             render_us, cycle_to_us(wait_sum / 30), frame_us, 1000000 / frame_us, render_us * 100 / frame_us,
              stats.tris_drawn / 30, stats.tris_culled / 30, stats.tris_skipped / 30);
-      render_sum = frame_sum = 0;
+      render_sum = wait_sum = frame_sum = 0;
       stats = (render_stats){ 0 };
     }
 

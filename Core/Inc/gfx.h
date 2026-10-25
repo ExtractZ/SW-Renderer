@@ -23,7 +23,9 @@ display in one DMA transfer. Pixels are RGB565, row by row from the top-left:
 #define GFX_GREEN  0x07E0
 #define GFX_BLUE   0x001F
 
-extern uint16_t gfx_fb[GFX_PIXELS];
+//swap will swap between buffers
+extern uint16_t *gfx_fb;
+uint16_t *gfx_swap(void); //returns the finished frame; gfx_fb becomes the other buffer
 
 //depth of the nearest surface drawn so far at each pixel (see project.h).
 //bigger = nearer, 0 = nothing drawn yet (infinitely far)

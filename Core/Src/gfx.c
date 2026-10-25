@@ -7,7 +7,16 @@
 #define FB_SECTION
 #endif
 
-uint16_t gfx_fb[GFX_PIXELS] FB_SECTION;
+static uint16_t fb_a[GFX_PIXELS] FB_SECTION;
+static uint16_t fb_b[GFX_PIXELS] FB_SECTION;
+uint16_t *gfx_fb = fb_a; //back buffer: the one being drawn into
+
+uint16_t *gfx_swap(void)
+{
+	uint16_t *done = gfx_fb;
+	gfx_fb = (gfx_fb == fb_a) ? fb_b : fb_a;
+	return done;
+}
 uint16_t gfx_zb[GFX_PIXELS] FB_SECTION; //z-buffer, also in SRAM3
 
 //clears zbuffer depth

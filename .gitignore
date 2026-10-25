@@ -5,3 +5,4 @@ SW-Renderer.launchhost/test_vec
 SW-Renderer.launch
 stm32cubeide.project.prefs
 .settings
+host/test_raster

@@ -1,0 +1,19 @@
+//3D models: a list of corners (vertices) and the triangles that connect them
+#ifndef MESH_H
+#define MESH_H
+
+#include <stdint.h>
+#include "vec.h"
+
+
+typedef struct {
+	const vec3 *verts;
+	const uint16_t (*tris)[3];
+	const uint16_t *tri_colors; //one RGB565 color per triangle, or NULL to use the default color
+	uint16_t num_verts; //nb vertices
+	uint16_t num_tris; //nb triangles
+} mesh;
+
+extern const mesh mesh_cube; //2x2x2 cube centered on the origin, one color per face
+
+#endif

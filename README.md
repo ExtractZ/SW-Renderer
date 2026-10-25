@@ -22,3 +22,9 @@ with goraud
 render 72850 us, frame 107777 us, 9 FPS | tris/frame: 268 drawn, 307 culled, 0 skipped
 -O2
 render 26607 us, frame 61482 us, 16 FPS | tris/frame: 268 drawn, 307 culled, 0 skipped
+
+with double frame buffering:
+-O2
+render 44981 us, wait 0 us, frame 45409 us, 22 FPS, CPU busy 99% | tris/frame: 256 drawn, 319 culled, 0 skipped
+
+

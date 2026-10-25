@@ -118,7 +118,9 @@ int main(void)
 
   //light from the upper left, slightly in front (camera space: x right, y up, z away)
   render_set_light(vec3_make(FX(-1.0), FX(1.0), FX(-1.0)));
-  const vec3 cube_pos = { 0, 0, FX(4.0) }; //cube center is 4 units in front of the camera
+  const mesh *model = &mesh_torus; //or &mesh_cube
+  const uint16_t model_color = GFX_RGB(240, 150, 40); //used when the mesh has no per-triangle colors
+  const vec3 model_pos = { 0, 0, FX(4.0) }; //model center is 4 units in front of the camera
 
   fx_angle ax = 0, ay = 0, az = 0;
   uint32_t frame = 0, render_sum = 0, frame_sum = 0;
@@ -139,7 +141,7 @@ int main(void)
     mat3_rotate_xyz(&rot, ax, ay, az);
 
     gfx_clear(GFX_BLACK);
-    render_mesh_flat(&mesh_cube, &rot, cube_pos, GFX_WHITE, &stats);
+    render_mesh_flat(model, &rot, model_pos, model_color, &stats);
 
     render_sum += timing_cycles() - render_start;
 

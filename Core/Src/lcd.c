@@ -169,15 +169,10 @@ int lcd_busy(void)
 	return dma_busy;
 }
 
-void lcd_draw_rows(const uint16_t *buf, uint16_t y0, uint16_t rows)
-{
-	lcd_set_window(0, y0, LCD_WIDTH - 1, y0 + rows - 1); // waits for any frame still sending
-	lcd_push_dma(buf, (uint32_t)LCD_WIDTH * rows);
-}
-
 void lcd_draw_frame(const uint16_t *buf)
 {
-	lcd_draw_rows(buf, 0, LCD_HEIGHT);
+	lcd_set_window(0, 0, LCD_WIDTH - 1, LCD_HEIGHT - 1); // waits for any frame still sending
+	lcd_push_dma(buf, (uint32_t)LCD_WIDTH * LCD_HEIGHT);
 }
 
 void lcd_fill(uint16_t color)

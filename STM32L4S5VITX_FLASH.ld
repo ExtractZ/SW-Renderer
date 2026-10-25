@@ -169,6 +169,16 @@ SECTIONS
     __bss_end__ = _ebss;
   } >RAM
 
+  /* Big buffers (framebuffer) in SRAM3: variables marked __attribute__((section(".ram3"))).
+     NOLOAD = not zeroed at startup, so the contents start as garbage */
+  .ram3 (NOLOAD) :
+  {
+    . = ALIGN(4);
+    *(.ram3)
+    *(.ram3*)
+    . = ALIGN(4);
+  } >RAM3
+
   /* User_heap_stack section, used to check that there is enough "RAM" Ram  type memory left */
   ._user_heap_stack :
   {

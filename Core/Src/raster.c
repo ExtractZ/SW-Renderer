@@ -31,7 +31,10 @@ static inline int32_t clamp32(int64_t v)
 static inline int32_t min3(int32_t a, int32_t b, int32_t c) { int32_t m = a < b ? a : b; return m < c ? m : c; }
 static inline int32_t max3(int32_t a, int32_t b, int32_t c) { int32_t m = a > b ? a : b; return m > c ? m : c; }
 
-int raster_tri_flat(const vec3 *v0, const vec3 *v1, const vec3 *v2, uint16_t color)
+//now set to goraud or flat brightness
+static inline __attribute__((always_inline))
+int raster_tri(const vec3 *v0, const vec3 *v1, const vec3 *v2, uint16_t color,
+               fx b0, fx b1, fx b2, const int gouraud)
 {
 	//reject anything far off-screen before converting (keeps the math in 32 bits)
 	const fx lo = fx_from_int(-RASTER_GUARD);
@@ -86,11 +89,27 @@ int raster_tri_flat(const vec3 *v0, const vec3 *v1, const vec3 *v2, uint16_t col
 	int32_t z_step_x = clamp32((d0 * step_x0 + d1 * step_x1 + d2 * step_x2) / area);
 	int32_t z_step_y = clamp32((d0 * step_y0 + d1 * step_y1 + d2 * step_y2) / area);
 
+	//Gouraud: the corner brightnesses are mixed across the triangle exactly like depth
+	int32_t br_row = 0, br_step_x = 0, br_step_y = 0;
+	uint32_t base_r = 0, base_g = 0, base_b = 0;
+	if (gouraud) {
+		int64_t l0 = b0, l1 = b1, l2 = b2; //b for different brightness levels
+		br_row    = clamp32((l0 * e0 + l1 * e1 + l2 * e2) / area);
+		br_step_x = clamp32((l0 * step_x0 + l1 * step_x1 + l2 * step_x2) / area);
+		br_step_y = clamp32((l0 * step_y0 + l1 * step_y1 + l2 * step_y2) / area);
+
+		//split the base color once per triangle, not per pixel
+		base_r = (color >> 11) & 0x1F;
+		base_g = (color >> 5) & 0x3F;
+		base_b = color & 0x1F;
+	}
+
 	uint16_t *row = &gfx_fb[min_y * GFX_WIDTH];
 	uint16_t *zrow = &gfx_zb[min_y * GFX_WIDTH];
 	for (int32_t y = min_y; y <= max_y; y++) {
 		int32_t w0 = row0, w1 = row1, w2 = row2;
 		int32_t z = z_row;
+		int32_t br = br_row;
 
 		for (int32_t x = min_x; x <= max_x; x++) {
 			//inside when all three are >= 0, i.e. none has its sign bit set
@@ -99,21 +118,41 @@ int raster_tri_flat(const vec3 *v0, const vec3 *v1, const vec3 *v2, uint16_t col
 				uint16_t depth = (uint16_t)(z >> 8);
 				if (depth > zrow[x]) {
 					zrow[x] = depth;
-					row[x] = color;
+					if (gouraud) {
+						//brightness at this pixel as 0..256, then scale each channel by it.
+						//only done for pixels that are actually drawn
+						uint32_t s = br > 0 ? (uint32_t)br >> 8 : 0;
+						row[x] = (uint16_t)(((base_r * s >> 8) << 11) | ((base_g * s >> 8) << 5) | (base_b * s >> 8));
+					} else {
+						row[x] = color;
+					}
 				}
 			}
 			w0 += step_x0;
 			w1 += step_x1;
 			w2 += step_x2;
 			z += z_step_x;
+			if (gouraud) br += br_step_x;
 		}
 
 		row0 += step_y0;
 		row1 += step_y1;
 		row2 += step_y2;
 		z_row += z_step_y;
+		if (gouraud) br_row += br_step_y;
 		row += GFX_WIDTH;
 		zrow += GFX_WIDTH;
 	}
 	return 1;
+}
+
+int raster_tri_flat(const vec3 *v0, const vec3 *v1, const vec3 *v2, uint16_t color)
+{
+	return raster_tri(v0, v1, v2, color, 0, 0, 0, 0);
+}
+
+int raster_tri_gouraud(const vec3 *v0, const vec3 *v1, const vec3 *v2,
+                       fx b0, fx b1, fx b2, uint16_t color)
+{
+	return raster_tri(v0, v1, v2, color, b0, b1, b2, 1);
 }

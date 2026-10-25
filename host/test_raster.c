@@ -172,8 +172,36 @@ static void test_depth_slope(void)
 	if (abs(seen - crossover) > 1) fail("depth slope: crossover in the wrong place");
 }
 
+//Gouraud: full brightness everywhere must match flat exactly, and a triangle lit
+//only at one corner must fade from that corner to the others
+static void test_gouraud(void)
+{
+	vec3 a = PZ(20, 20, 3), b = PZ(220, 20, 3), c = PZ(20, 220, 3);
+
+	gfx_clear(0);
+	gfx_clear_depth();
+	raster_tri_gouraud(&a, &b, &c, FX_ONE, FX_ONE, FX_ONE, GFX_WHITE);
+	int mismatched = 0;
+	for (int y = 0; y < GFX_HEIGHT; y++)
+		for (int x = 0; x < GFX_WIDTH; x++)
+			if (pixel(x, y) != 0 && pixel(x, y) != GFX_WHITE) mismatched++;
+	if (mismatched) fail("gouraud: brightness 1 everywhere should give the plain color");
+
+	gfx_clear(0);
+	gfx_clear_depth();
+	raster_tri_gouraud(&a, &b, &c, FX_ONE, 0, 0, GFX_WHITE); //lit only at corner a
+	int near_a = pixel(22, 22) >> 11;  //red channel, 0..31
+	int middle = pixel(86, 86) >> 11;  //about a third of the way from a
+	int near_b = pixel(215, 22) >> 11;
+	printf("gouraud red channel: near lit corner %d, middle %d, near dark corner %d\n", near_a, middle, near_b);
+	if (near_a < 29) fail("gouraud: should be bright next to the lit corner");
+	if (middle < 8 || middle > 13) fail("gouraud: should be about 1/3 brightness at the center");
+	if (near_b > 2) fail("gouraud: should be dark next to the unlit corners");
+}
+
 int main(void)
 {
+	test_gouraud();
 	test_full_screen();
 	test_fan();
 	test_backface();

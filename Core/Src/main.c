@@ -142,7 +142,7 @@ int main(void)
 
     gfx_clear(GFX_BLACK);
     gfx_clear_depth();
-    render_mesh_flat(model, &rot, model_pos, model_color, &stats);
+    render_mesh_gouraud(model, &rot, model_pos, model_color, &stats); //or render_mesh_flat to compare
 
     render_sum += timing_cycles() - render_start;
 

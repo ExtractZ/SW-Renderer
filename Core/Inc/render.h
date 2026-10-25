@@ -19,4 +19,8 @@ void render_set_light(vec3 to_light);
 //draws one model
 void render_mesh_flat(const mesh *m, const mat3 *rot, vec3 pos, uint16_t default_color, render_stats *stats);
 
+//same, but smooth: lighting at each vertex (from the mesh's vertex normals), blended
+//across each triangle. meshes without normals fall back to flat
+void render_mesh_gouraud(const mesh *m, const mat3 *rot, vec3 pos, uint16_t default_color, render_stats *stats);
+
 #endif

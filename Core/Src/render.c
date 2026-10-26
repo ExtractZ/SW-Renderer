@@ -130,9 +130,10 @@ void render_prepare(const mesh *m, const mat3 *rot, vec3 pos, uint16_t default_c
 	add_stats(stats, &st);
 }
 
-void render_draw(void)
+uint32_t render_draw(void)
 {
 	int32_t strip_last = gfx_y0 + gfx_rows - 1;
+	uint32_t calls = 0;
 
 	for (uint32_t k = 0; k < num_vis; k++) {
 		const vis_tri *v = &vis[k];
@@ -143,7 +144,9 @@ void render_draw(void)
 			raster_tri_gouraud(s0, s1, s2, vert_bright[v->i0], vert_bright[v->i1], vert_bright[v->i2], v->color);
 		else
 			raster_tri_flat(s0, s1, s2, v->color);
+		calls++;
 	}
+	return calls; //triangles set up for this strip (one crossing several strips counts once per strip)
 }
 
 void render_mesh_flat(const mesh *m, const mat3 *rot, vec3 pos, uint16_t default_color, render_stats *stats)

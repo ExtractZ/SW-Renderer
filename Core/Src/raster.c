@@ -28,6 +28,30 @@ static inline int32_t clamp32(int64_t v)
 	return v > INT32_MAX ? INT32_MAX : (v < INT32_MIN ? INT32_MIN : (int32_t)v);
 }
 
+/*
+calculations for where the start and end of an edge is.
+this will be called per edge, so that the pixels in between this
+start and end can be colored with pixels
+*/
+static inline void span_limit(int32_t w, int32_t step, int32_t *lo, int32_t *hi)
+{
+	if (step > 0) {
+		if (w < 0) {
+			int32_t k = (-w + step - 1) / step; //first k where w + k * step >= 0 (rounded up)
+			if (k > *lo) *lo = k;
+		}
+	} else if (step < 0) {
+		if (w < 0) {
+			*hi = -1; //already outside, and only getting further out
+		} else {
+			int32_t k = w / -step; //last k where w + k * step >= 0 (rounded down)
+			if (k < *hi) *hi = k;
+		}
+	} else if (w < 0) {
+		*hi = -1;
+	}
+}
+
 static inline int32_t min3(int32_t a, int32_t b, int32_t c) { int32_t m = a < b ? a : b; return m < c ? m : c; }
 static inline int32_t max3(int32_t a, int32_t b, int32_t c) { int32_t m = a > b ? a : b; return m > c ? m : c; }
 
@@ -112,32 +136,38 @@ int raster_tri(const vec3 *v0, const vec3 *v1, const vec3 *v2, uint16_t color,
 	uint16_t *row = &gfx_fb[(min_y - gfx_y0) * GFX_WIDTH];
 	uint16_t *zrow = &gfx_zb[(min_y - gfx_y0) * GFX_WIDTH];
 	for (int32_t y = min_y; y <= max_y; y++) {
-		int32_t w0 = row0, w1 = row1, w2 = row2;
-		int32_t z = z_row;
-		int32_t br = br_row;
+		//the part of this row inside all three edges, as offsets from min_x.
+		//every pixel in it is inside, so the loop below doesn't test or step the edges
+		int32_t lo = 0, hi = max_x - min_x;
+		span_limit(row0, step_x0, &lo, &hi);
+		span_limit(row1, step_x1, &lo, &hi);
+		span_limit(row2, step_x2, &lo, &hi);
 
-		for (int32_t x = min_x; x <= max_x; x++) {
-			//inside when all three are >= 0, i.e. none has its sign bit set
-			if ((w0 | w1 | w2) >= 0) {
+		if (lo <= hi) {
+			//same values the old per-pixel stepping reached at x = min_x + lo
+			int32_t z = clamp32(z_row + (int64_t)lo * z_step_x);
+			int32_t br = gouraud ? clamp32(br_row + (int64_t)lo * br_step_x) : 0;
+			uint16_t *c = row + min_x + lo;
+			uint16_t *zp = zrow + min_x + lo;
+			uint16_t *c_end = row + min_x + hi;
+
+			for (; c <= c_end; c++, zp++) {
 				//depth test: only draw if nearer (bigger) than what's already there
 				uint16_t depth = (uint16_t)(z >> 8);
-				if (depth > zrow[x]) {
-					zrow[x] = depth;
+				if (depth > *zp) {
+					*zp = depth;
 					if (gouraud) {
 						//brightness at this pixel as 0..256, then scale each channel by it.
 						//only done for pixels that are actually drawn
 						uint32_t s = br > 0 ? (uint32_t)br >> 8 : 0;
-						row[x] = (uint16_t)(((base_r * s >> 8) << 11) | ((base_g * s >> 8) << 5) | (base_b * s >> 8));
+						*c = (uint16_t)(((base_r * s >> 8) << 11) | ((base_g * s >> 8) << 5) | (base_b * s >> 8));
 					} else {
-						row[x] = color;
+						*c = color;
 					}
 				}
+				z += z_step_x;
+				if (gouraud) br += br_step_x;
 			}
-			w0 += step_x0;
-			w1 += step_x1;
-			w2 += step_x2;
-			z += z_step_x;
-			if (gouraud) br += br_step_x;
 		}
 
 		row0 += step_y0;

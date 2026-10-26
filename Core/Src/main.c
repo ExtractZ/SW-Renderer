@@ -125,8 +125,21 @@ int main(void)
   printf("strips: %d rows, %d per frame, buffers %lu bytes\r\n", GFX_STRIP_ROWS, GFX_HEIGHT / GFX_STRIP_ROWS,
          (unsigned long)(3 * GFX_STRIP_PIXELS * sizeof(uint16_t)));
 
+  //one-time benchmark: cost of a 64-bit division (no hardware support on the M4,
+  //so it's a software routine). volatile so the compiler can't precompute it
+  {
+    volatile int64_t num = 0x123456789ALL, den = 12345;
+    volatile int64_t sink = 0;
+    uint32_t t_div = timing_cycles();
+    for (int i = 0; i < 1000; i++)
+      sink = num / (den + i);
+    t_div = timing_cycles() - t_div;
+    (void)sink;
+    printf("64-bit divide: ~%lu cycles each (incl. loop)\r\n", t_div / 1000);
+  }
+
   fx_angle ax = 0, ay = 0, az = 0;
-  uint32_t frame = 0, render_sum = 0, wait_sum = 0, frame_sum = 0;
+  uint32_t frame = 0, prep_sum = 0, clear_sum = 0, draw_sum = 0, wait_sum = 0, frame_sum = 0, raster_calls = 0;
   render_stats stats = { 0 };
   uint32_t frame_start = timing_cycles();
   /* USER CODE END 2 */
@@ -138,22 +151,25 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    uint32_t render_start = timing_cycles();
+    uint32_t t = timing_cycles();
 
     mat3 rot;
     mat3_rotate_xyz(&rot, ax, ay, az);
     render_prepare(model, &rot, model_pos, model_color, 1, &stats);
 
-    render_sum += timing_cycles() - render_start;
+    prep_sum += timing_cycles() - t;
 
     for (int32_t y0 = 0; y0 < GFX_HEIGHT; y0 += GFX_STRIP_ROWS)
     {
-      render_start = timing_cycles();
+      t = timing_cycles();
       gfx_begin_strip(y0, GFX_STRIP_ROWS);
       gfx_clear(GFX_BLACK);
       gfx_clear_depth();
-      render_draw();
-      render_sum += timing_cycles() - render_start;
+      uint32_t t_draw = timing_cycles();
+      clear_sum += t_draw - t;
+
+      raster_calls += render_draw();
+      draw_sum += timing_cycles() - t_draw;
 
       //double buffering: the previous frame (in the other buffer) may still be sending.
       //wait for it to finish, since that buffer is the one we draw into next.
@@ -173,11 +189,15 @@ int main(void)
     if (++frame % 30 == 0)
     {
       uint32_t frame_us = cycle_to_us(frame_sum / 30);
-      uint32_t render_us = cycle_to_us(render_sum / 30);
-      printf("render %lu us, wait %lu us, frame %lu us, %lu FPS, CPU busy %lu%% | tris/frame: %lu drawn, %lu culled, %lu skipped\r\n",
-             render_us, cycle_to_us(wait_sum / 30), frame_us, 1000000 / frame_us, render_us * 100 / frame_us,
-             stats.tris_drawn / 30, stats.tris_culled / 30, stats.tris_skipped / 30);
-      render_sum = wait_sum = frame_sum = 0;
+      uint32_t prep_us = cycle_to_us(prep_sum / 30);
+      uint32_t clear_us = cycle_to_us(clear_sum / 30);
+      uint32_t draw_us = cycle_to_us(draw_sum / 30);
+      uint32_t render_us = prep_us + clear_us + draw_us;
+      printf("render %lu us (prepare %lu, clear %lu, draw %lu), wait %lu us, frame %lu us, %lu FPS, CPU busy %lu%%"
+             " | tris/frame: %lu drawn, %lu culled, %lu raster calls\r\n",
+             render_us, prep_us, clear_us, draw_us, cycle_to_us(wait_sum / 30), frame_us, 1000000 / frame_us,
+             render_us * 100 / frame_us, stats.tris_drawn / 30, stats.tris_culled / 30, raster_calls / 30);
+      prep_sum = clear_sum = draw_sum = wait_sum = frame_sum = raster_calls = 0;
       stats = (render_stats){ 0 };
     }
 

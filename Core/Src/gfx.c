@@ -31,22 +31,30 @@ void gfx_begin_strip(int32_t y0, int32_t rows) //example (80,40) meaning row 80 
 	gfx_rows = rows;
 }
 
+//changed due to aliasing. we were forced to recompute gfx_row which adds extra unecessary instructions
+static void fill32(uint32_t *p, uint32_t n, uint32_t v)
+{
+	uint32_t *end = p + n;
+	while (p < end) {
+		p[0] = v;
+		p[1] = v;
+		p[2] = v;
+		p[3] = v;
+		p += 4;
+	}
+}
+
 //clears zbuffer depth
 void gfx_clear_depth(void)
 {
-	uint32_t *p = (uint32_t *)gfx_zb;
-	for (int32_t i = 0; i < gfx_rows * GFX_WIDTH / 2; i++)
-		p[i] = 0;
+	fill32((uint32_t *)gfx_zb, (uint32_t)gfx_rows * GFX_WIDTH / 2, 0);
 }
 
 void gfx_clear(uint16_t color)
 {
 	//write two pixels per store: half as many writes as a uint16_t loop
 	uint32_t two = ((uint32_t)color << 16) | color;
-	uint32_t *p = (uint32_t *)gfx_fb;
-
-	for (int32_t i = 0; i < gfx_rows * GFX_WIDTH / 2; i++)
-		p[i] = two;
+	fill32((uint32_t *)gfx_fb, (uint32_t)gfx_rows * GFX_WIDTH / 2, two);
 }
 
 /*

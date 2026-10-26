@@ -19,7 +19,7 @@ typedef struct {
 void render_set_light(vec3 to_light);
 
 void render_prepare(const mesh *m, const mat3 *rot, vec3 pos, uint16_t default_color, int gouraud, render_stats *stats);
-void render_draw(void);
+uint32_t render_draw(void); //returns how many triangles it rasterized
 //draws one model
 void render_mesh_flat(const mesh *m, const mat3 *rot, vec3 pos, uint16_t default_color, render_stats *stats);
 

@@ -14,6 +14,11 @@ display in one DMA transfer. Pixels are RGB565, row by row from the top-left:
 #define GFX_HEIGHT 240
 #define GFX_PIXELS (GFX_WIDTH * GFX_HEIGHT)
 
+#ifndef GFX_STRIP_ROWS
+#define GFX_STRIP_ROWS 40
+#endif
+#define GFX_STRIP_PIXELS (GFX_WIDTH * GFX_STRIP_ROWS)
+
 //8-bit-per-channel color -> RGB565 (5 bits red, 6 green, 5 blue)
 #define GFX_RGB(r, g, b) ((uint16_t)((((r) & 0xF8) << 8) | (((g) & 0xFC) << 3) | ((b) >> 3)))
 
@@ -29,7 +34,11 @@ uint16_t *gfx_swap(void); //returns the finished frame; gfx_fb becomes the other
 
 //depth of the nearest surface drawn so far at each pixel (see project.h).
 //bigger = nearer, 0 = nothing drawn yet (infinitely far)
-extern uint16_t gfx_zb[GFX_PIXELS];
+extern uint16_t *gfx_zb;
+
+extern int32_t gfx_y0;
+extern int32_t gfx_rows;
+void gfx_begin_strip(int32_t y0, int32_t rows);
 
 void gfx_clear(uint16_t color);
 void gfx_clear_depth(void); //call every frame before drawing
@@ -38,8 +47,8 @@ void gfx_clear_depth(void); //call every frame before drawing
 static inline void gfx_pixel(int32_t x, int32_t y, uint16_t color)
 {
 	//casting to unsigned turns negative values huge, so one compare covers both sides
-	if ((uint32_t)x < GFX_WIDTH && (uint32_t)y < GFX_HEIGHT)
-		gfx_fb[y * GFX_WIDTH + x] = color;
+	if ((uint32_t)x < GFX_WIDTH && (uint32_t)(y - gfx_y0) < (uint32_t)gfx_rows)
+		gfx_fb[(y - gfx_y0) * GFX_WIDTH + x] = color;
 }
 
 void gfx_line(int32_t x0, int32_t y0, int32_t x1, int32_t y1, uint16_t color);

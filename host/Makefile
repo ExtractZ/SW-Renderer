@@ -2,10 +2,12 @@
 #   make -C host test
 
 CC         = cc
-CFLAGS     = -std=c11 -O2 -Wall -Wextra -I../Core/Inc
+CFLAGS     = -std=c11 -O2 -Wall -Wextra -I../Core/Inc -DGFX_STRIP_ROWS=240
 SRC_FX     = ../Core/Src/fixed.c ../Core/Src/fixed_sin_table.c
 SRC_VEC    = $(SRC_FX) ../Core/Src/vec.c ../Core/Src/mat.c
 SRC_RASTER = $(SRC_FX) ../Core/Src/gfx.c ../Core/Src/raster.c
+SRC_RENDER = $(SRC_VEC) ../Core/Src/gfx.c ../Core/Src/raster.c ../Core/Src/render.c \
+             ../Core/Src/mesh_cube.c ../Core/Src/mesh_torus.c
 HDR        = $(wildcard ../Core/Inc/*.h)
 
 test_fixed: test_fixed.c $(SRC_FX) $(HDR)
@@ -17,12 +19,16 @@ test_vec: test_vec.c $(SRC_VEC) $(HDR)
 test_raster: test_raster.c $(SRC_RASTER) $(HDR)
 	$(CC) $(CFLAGS) -o $@ test_raster.c $(SRC_RASTER) -lm
 
-test: test_fixed test_vec test_raster
+test_strips: test_strips.c $(SRC_RENDER) $(HDR)
+	$(CC) $(CFLAGS) -o $@ test_strips.c $(SRC_RENDER) -lm
+
+test: test_fixed test_vec test_raster test_strips
 	./test_fixed
 	./test_vec
 	./test_raster
+	./test_strips
 
 clean:
-	rm -f test_fixed test_vec test_raster
+	rm -f test_fixed test_vec test_raster test_strips
 
 .PHONY: test clean

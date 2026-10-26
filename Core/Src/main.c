@@ -122,6 +122,9 @@ int main(void)
   const uint16_t model_color = GFX_RGB(240, 150, 40); //used when the mesh has no per-triangle colors
   const vec3 model_pos = { 0, 0, FX(4.0) }; //model center is 4 units in front of the camera
 
+  printf("strips: %d rows, %d per frame, buffers %lu bytes\r\n", GFX_STRIP_ROWS, GFX_HEIGHT / GFX_STRIP_ROWS,
+         (unsigned long)(3 * GFX_STRIP_PIXELS * sizeof(uint16_t)));
+
   fx_angle ax = 0, ay = 0, az = 0;
   uint32_t frame = 0, render_sum = 0, wait_sum = 0, frame_sum = 0;
   render_stats stats = { 0 };
@@ -139,21 +142,28 @@ int main(void)
 
     mat3 rot;
     mat3_rotate_xyz(&rot, ax, ay, az);
-
-    gfx_clear(GFX_BLACK);
-    gfx_clear_depth();
-    render_mesh_gouraud(model, &rot, model_pos, model_color, &stats); //or render_mesh_flat to compare
+    render_prepare(model, &rot, model_pos, model_color, 1, &stats);
 
     render_sum += timing_cycles() - render_start;
 
-    //double buffering: the previous frame (in the other buffer) may still be sending.
-    //wait for it to finish, since that buffer is the one we draw into next.
-    uint32_t wait_start = timing_cycles();
-    while (lcd_busy()) {}
-    wait_sum += timing_cycles() - wait_start;
+    for (int32_t y0 = 0; y0 < GFX_HEIGHT; y0 += GFX_STRIP_ROWS)
+    {
+      render_start = timing_cycles();
+      gfx_begin_strip(y0, GFX_STRIP_ROWS);
+      gfx_clear(GFX_BLACK);
+      gfx_clear_depth();
+      render_draw();
+      render_sum += timing_cycles() - render_start;
 
-    //send the frame just drawn (returns right away) and switch to the other buffer
-    lcd_draw_frame(gfx_swap());
+      //double buffering: the previous frame (in the other buffer) may still be sending.
+      //wait for it to finish, since that buffer is the one we draw into next.
+      uint32_t wait_start = timing_cycles();
+      while (lcd_busy()) {}
+      wait_sum += timing_cycles() - wait_start;
+
+      //send the frame just drawn (returns right away) and switch to the other buffer
+      lcd_draw_rows(gfx_swap(), y0, GFX_STRIP_ROWS);
+    }
 
     uint32_t now = timing_cycles();
     frame_sum += now - frame_start;

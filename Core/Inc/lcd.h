@@ -19,5 +19,6 @@ void lcd_push_dma(const uint16_t *buf, uint32_t count); //sends a frame without 
 int lcd_busy(void); //checks if DMA still sending
 void lcd_fill(uint16_t color); //fills screen with one color, one RGB565 value
 void lcd_draw_frame(const uint16_t *buf); //starts sending a full-screen frame and returns. don't touch buf until lcd_busy() is 0
+void lcd_draw_rows(const uint16_t *buf, uint16_t y0, uint16_t rows);
 
 #endif

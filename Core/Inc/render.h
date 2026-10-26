@@ -7,6 +7,7 @@
 #include "mesh.h"
 
 #define RENDER_MAX_VERTS 1024 //meshes with more vertices are skipped
+#define RENDER_MAX_TRIS  1024 //most triangles a model can have
 
 typedef struct {
 	uint32_t tris_drawn;
@@ -16,6 +17,9 @@ typedef struct {
 
 //direction from the scene toward the light, in camera space (normalized inside)
 void render_set_light(vec3 to_light);
+
+void render_prepare(const mesh *m, const mat3 *rot, vec3 pos, uint16_t default_color, int gouraud, render_stats *stats);
+void render_draw(void);
 //draws one model
 void render_mesh_flat(const mesh *m, const mat3 *rot, vec3 pos, uint16_t default_color, render_stats *stats);
 

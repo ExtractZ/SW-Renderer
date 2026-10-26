@@ -59,9 +59,11 @@ int raster_tri(const vec3 *v0, const vec3 *v1, const vec3 *v2, uint16_t color,
 	int32_t max_x = max3(x0, x1, x2) >> SUB_BITS;
 	int32_t max_y = max3(y0, y1, y2) >> SUB_BITS;
 	if (min_x < 0) min_x = 0;
-	if (min_y < 0) min_y = 0;
 	if (max_x > GFX_WIDTH - 1) max_x = GFX_WIDTH - 1;
-	if (max_y > GFX_HEIGHT - 1) max_y = GFX_HEIGHT - 1;
+	//now cutting bounding box to the strip
+	int32_t top = min_y < 0 ? 0 : min_y;
+	if (min_y < gfx_y0) min_y = gfx_y0;
+	if (max_y > gfx_y0 + gfx_rows - 1) max_y = gfx_y0 + gfx_rows - 1;
 	if (min_x > max_x || min_y > max_y) return 0; //entirely off-screen
 
 	//edge value changes depending on moving pixels
@@ -73,21 +75,23 @@ int raster_tri(const vec3 *v0, const vec3 *v1, const vec3 *v2, uint16_t color,
 
 	//edge values at the center of the top-left pixel of the box
 	int32_t px = (min_x << SUB_BITS) + SUB_ONE / 2;
-	int32_t py = (min_y << SUB_BITS) + SUB_ONE / 2;
+	int32_t py = (top << SUB_BITS) + SUB_ONE / 2;
 	int32_t e0 = (x2 - x1) * (py - y1) - (y2 - y1) * (px - x1);
 	int32_t e1 = (x0 - x2) * (py - y2) - (y0 - y2) * (px - x2);
 	int32_t e2 = (x1 - x0) * (py - y0) - (y1 - y0) * (px - x0);
 
 	//with the fill rule bias, for the inside test
-	int32_t row0 = e0 + edge_bias(x1, y1, x2, y2);
-	int32_t row1 = e1 + edge_bias(x2, y2, x0, y0);
-	int32_t row2 = e2 + edge_bias(x0, y0, x1, y1);
+	int32_t skip = min_y - top;
+	int32_t row0 = e0 + skip * step_y0 + edge_bias(x1, y1, x2, y2);
+	int32_t row1 = e1 + skip * step_y1 + edge_bias(x2, y2, x0, y0);
+	int32_t row2 = e2 + skip * step_y2 + edge_bias(x0, y0, x1, y1);
 
 	//weighted mix of dpeth for the pixels in between the vertices
 	int64_t d0 = v0->z, d1 = v1->z, d2 = v2->z;
 	int32_t z_row    = clamp32((d0 * e0 + d1 * e1 + d2 * e2) / area);
 	int32_t z_step_x = clamp32((d0 * step_x0 + d1 * step_x1 + d2 * step_x2) / area);
 	int32_t z_step_y = clamp32((d0 * step_y0 + d1 * step_y1 + d2 * step_y2) / area);
+	z_row = clamp32(z_row + (int64_t)skip * z_step_y);
 
 	//Gouraud: the corner brightnesses are mixed across the triangle exactly like depth
 	int32_t br_row = 0, br_step_x = 0, br_step_y = 0;
@@ -97,6 +101,7 @@ int raster_tri(const vec3 *v0, const vec3 *v1, const vec3 *v2, uint16_t color,
 		br_row    = clamp32((l0 * e0 + l1 * e1 + l2 * e2) / area);
 		br_step_x = clamp32((l0 * step_x0 + l1 * step_x1 + l2 * step_x2) / area);
 		br_step_y = clamp32((l0 * step_y0 + l1 * step_y1 + l2 * step_y2) / area);
+		br_row = clamp32(br_row + (int64_t)skip * br_step_y);
 
 		//split the base color once per triangle, not per pixel
 		base_r = (color >> 11) & 0x1F;
@@ -104,8 +109,8 @@ int raster_tri(const vec3 *v0, const vec3 *v1, const vec3 *v2, uint16_t color,
 		base_b = color & 0x1F;
 	}
 
-	uint16_t *row = &gfx_fb[min_y * GFX_WIDTH];
-	uint16_t *zrow = &gfx_zb[min_y * GFX_WIDTH];
+	uint16_t *row = &gfx_fb[(min_y - gfx_y0) * GFX_WIDTH];
+	uint16_t *zrow = &gfx_zb[(min_y - gfx_y0) * GFX_WIDTH];
 	for (int32_t y = min_y; y <= max_y; y++) {
 		int32_t w0 = row0, w1 = row1, w2 = row2;
 		int32_t z = z_row;

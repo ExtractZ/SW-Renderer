@@ -1,6 +1,7 @@
 #include "render.h"
 #include "project.h"
 #include "raster.h"
+#include "gfx.h"
 
 #define AMBIENT FX(0.2) //minimum brightness, so faces turned away from the light aren't pure black
 
@@ -10,6 +11,16 @@ static vec3 cam_verts[RENDER_MAX_VERTS];    //camera space (for normals)
 static vec3 screen_verts[RENDER_MAX_VERTS]; //screen space (for rasterizing)
 static uint8_t vert_ok[RENDER_MAX_VERTS];   //0 = behind the camera
 static fx vert_bright[RENDER_MAX_VERTS];    //Gouraud: lighting at each vertex
+
+typedef struct {
+	uint16_t i0, i1, i2;
+	uint16_t color;
+	int32_t y_min, y_max;
+} vis_tri;
+
+static vis_tri vis[RENDER_MAX_TRIS];
+static uint32_t num_vis = 0;
+static int vis_gouraud = 0;
 
 static vec3 light_dir = { 0, 0, -FX_ONE }; //default: light coming from the camera
 
@@ -76,59 +87,73 @@ static void add_stats(render_stats *stats, const render_stats *st)
 	stats->tris_skipped += st->tris_skipped;
 }
 
-void render_mesh_flat(const mesh *m, const mat3 *rot, vec3 pos, uint16_t default_color, render_stats *stats)
+void render_prepare(const mesh *m, const mat3 *rot, vec3 pos, uint16_t default_color, int gouraud, render_stats *stats)
 {
 	render_stats st = { 0 };
-	if (m->num_verts > RENDER_MAX_VERTS) return;
+	num_vis = 0;
+	if (m->num_verts > RENDER_MAX_VERTS || m->num_tris > RENDER_MAX_TRIS) return;
 
+	vis_gouraud = gouraud && m->normals; //no vertex normals (e.g. the cube): nothing to smooth
 	transform_verts(m, rot, pos);
+
+	//lighting once per vertex. a normal is a direction, so it's only rotated (not moved)
+	if (vis_gouraud)
+		for (uint32_t i = 0; i < m->num_verts; i++)
+			if (vert_ok[i])
+				vert_bright[i] = lighting(mat3_mul_vec(rot, m->normals[i]));
 
 	for (uint32_t t = 0; t < m->num_tris; t++) {
 		uint16_t i0 = m->tris[t][0], i1 = m->tris[t][1], i2 = m->tris[t][2];
 		if (!tri_visible(i0, i1, i2, &st)) continue;
 
-		//flat shading: one normal for the whole face, from its camera-space corners
-		vec3 c0 = cam_verts[i0];
-		vec3 normal = vec3_normalize(vec3_cross(vec3_sub(cam_verts[i1], c0), vec3_sub(cam_verts[i2], c0)));
-
 		uint16_t base = m->tri_colors ? m->tri_colors[t] : default_color;
-		if (raster_tri_flat(&screen_verts[i0], &screen_verts[i1], &screen_verts[i2], shade(base, lighting(normal))))
-			st.tris_drawn++;
-		else
-			st.tris_culled++; //too thin to matter, or far off-screen
+		vis_tri *v = &vis[num_vis++];
+		v->i0 = i0;
+		v->i1 = i1;
+		v->i2 = i2;
+
+		if (vis_gouraud) {
+			v->color = base;
+		} else {
+			//flat shading: one normal for the whole face, from its camera-space corners
+			vec3 c0 = cam_verts[i0];
+			vec3 normal = vec3_normalize(vec3_cross(vec3_sub(cam_verts[i1], c0), vec3_sub(cam_verts[i2], c0)));
+			v->color = shade(base, lighting(normal));
+		}
+
+		fx y0 = screen_verts[i0].y, y1 = screen_verts[i1].y, y2 = screen_verts[i2].y;
+		v->y_min = fx_to_int(fx_min(y0, fx_min(y1, y2)));
+		v->y_max = fx_to_int(fx_max(y0, fx_max(y1, y2)));
+		st.tris_drawn++;
 	}
 
 	add_stats(stats, &st);
 }
 
+void render_draw(void)
+{
+	int32_t strip_last = gfx_y0 + gfx_rows - 1;
+
+	for (uint32_t k = 0; k < num_vis; k++) {
+		const vis_tri *v = &vis[k];
+		if (v->y_max < gfx_y0 || v->y_min > strip_last) continue;
+
+		const vec3 *s0 = &screen_verts[v->i0], *s1 = &screen_verts[v->i1], *s2 = &screen_verts[v->i2];
+		if (vis_gouraud)
+			raster_tri_gouraud(s0, s1, s2, vert_bright[v->i0], vert_bright[v->i1], vert_bright[v->i2], v->color);
+		else
+			raster_tri_flat(s0, s1, s2, v->color);
+	}
+}
+
+void render_mesh_flat(const mesh *m, const mat3 *rot, vec3 pos, uint16_t default_color, render_stats *stats)
+{
+	render_prepare(m, rot, pos, default_color, 0, stats);
+	render_draw();
+}
+
 void render_mesh_gouraud(const mesh *m, const mat3 *rot, vec3 pos, uint16_t default_color, render_stats *stats)
 {
-	if (!m->normals) { //no vertex normals (e.g. the cube): nothing to smooth
-		render_mesh_flat(m, rot, pos, default_color, stats);
-		return;
-	}
-
-	render_stats st = { 0 };
-	if (m->num_verts > RENDER_MAX_VERTS) return;
-
-	transform_verts(m, rot, pos);
-
-	//lighting once per vertex. a normal is a direction, so it's only rotated (not moved)
-	for (uint32_t i = 0; i < m->num_verts; i++)
-		if (vert_ok[i])
-			vert_bright[i] = lighting(mat3_mul_vec(rot, m->normals[i]));
-
-	for (uint32_t t = 0; t < m->num_tris; t++) {
-		uint16_t i0 = m->tris[t][0], i1 = m->tris[t][1], i2 = m->tris[t][2];
-		if (!tri_visible(i0, i1, i2, &st)) continue;
-
-		uint16_t base = m->tri_colors ? m->tri_colors[t] : default_color;
-		if (raster_tri_gouraud(&screen_verts[i0], &screen_verts[i1], &screen_verts[i2],
-		                       vert_bright[i0], vert_bright[i1], vert_bright[i2], base))
-			st.tris_drawn++;
-		else
-			st.tris_culled++;
-	}
-
-	add_stats(stats, &st);
+	render_prepare(m, rot, pos, default_color, 1, stats);
+	render_draw();
 }

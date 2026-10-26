@@ -6,3 +6,5 @@ SW-Renderer.launch
 stm32cubeide.project.prefs
 .settings
 host/test_raster
+
+host/test_strips

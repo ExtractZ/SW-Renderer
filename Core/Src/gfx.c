@@ -7,8 +7,10 @@
 #define FB_SECTION
 #endif
 
-static uint16_t fb_a[GFX_PIXELS] FB_SECTION;
-static uint16_t fb_b[GFX_PIXELS] FB_SECTION;
+_Static_assert(GFX_HEIGHT % GFX_STRIP_ROWS == 0, "GFX_STRIP_ROWS must divide the screen height");
+
+static uint16_t fb_a[GFX_STRIP_PIXELS] FB_SECTION;
+static uint16_t fb_b[GFX_STRIP_PIXELS] FB_SECTION;
 uint16_t *gfx_fb = fb_a; //back buffer: the one being drawn into
 
 uint16_t *gfx_swap(void)
@@ -17,13 +19,23 @@ uint16_t *gfx_swap(void)
 	gfx_fb = (gfx_fb == fb_a) ? fb_b : fb_a;
 	return done;
 }
-uint16_t gfx_zb[GFX_PIXELS] FB_SECTION; //z-buffer, also in SRAM3
+static uint16_t zb[GFX_STRIP_PIXELS] FB_SECTION; //z-buffer, also in SRAM3
+uint16_t *gfx_zb = zb;
+
+int32_t gfx_y0 = 0;
+int32_t gfx_rows = GFX_STRIP_ROWS;
+
+void gfx_begin_strip(int32_t y0, int32_t rows) //example (80,40) meaning row 80 to 119
+{
+	gfx_y0 = y0; //screen row where current strip starts
+	gfx_rows = rows;
+}
 
 //clears zbuffer depth
 void gfx_clear_depth(void)
 {
 	uint32_t *p = (uint32_t *)gfx_zb;
-	for (uint32_t i = 0; i < GFX_PIXELS / 2; i++)
+	for (int32_t i = 0; i < gfx_rows * GFX_WIDTH / 2; i++)
 		p[i] = 0;
 }
 
@@ -33,7 +45,7 @@ void gfx_clear(uint16_t color)
 	uint32_t two = ((uint32_t)color << 16) | color;
 	uint32_t *p = (uint32_t *)gfx_fb;
 
-	for (uint32_t i = 0; i < GFX_PIXELS / 2; i++)
+	for (int32_t i = 0; i < gfx_rows * GFX_WIDTH / 2; i++)
 		p[i] = two;
 }
 

@@ -27,4 +27,6 @@ with double frame buffering:
 -O2
 render 44981 us, wait 0 us, frame 45409 us, 22 FPS, CPU busy 99% | tris/frame: 256 drawn, 319 culled, 0 skipped
 
+with strip buffers instead of writing the wohle frame
+render 22484 us, wait 17005 us, frame 40094 us, 24 FPS, CPU busy 56% | tris/frame: 249 drawn, 326 culled, 0 skipped
 

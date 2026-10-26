@@ -6,8 +6,10 @@ display, using fixed-point math, a custom triangle rasterizer and an ST7789 driv
 double-buffered DMA. Rendering in 40-row strips cuts frame buffer memory from **345.6 KB
 to 57.6 KB** with no loss in frame rate.
 
-<!-- TBD: demo GIF or video link -->
-![Demo](docs/demo.gif)
+<p align="center">
+  <img src="docs/demo.gif" alt="Gouraud-shaded torus spinning on the 240×240 display" width="280">
+</p>
+<p align="center"><a href="docs/demo.mp4">Full-quality video (MP4)</a></p>
 
 ## Highlights
 
@@ -34,8 +36,9 @@ to 57.6 KB** with no loss in frame rate.
 | Display | Adafruit #4313: 1.3" 240×240 IPS TFT, ST7789 controller, SPI |
 | Link | SPI1 (16-bit frames, 60 MHz) + DMA1, 115,200 bytes per frame |
 
-<!-- TBD: photo of the hardware -->
-![Hardware](docs/hardware.jpg)
+<p align="center">
+  <img src="docs/hardware.jpg" alt="B-L4S5I-IOT01A board wired to the ST7789 display on a breadboard" width="600">
+</p>
 
 | Display pin | Board pin | MCU pin |
 |---|---|---|
